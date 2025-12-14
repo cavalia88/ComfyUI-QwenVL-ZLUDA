@@ -1,6 +1,8 @@
 # **QwenVL for ComfyUI-ZLUDA**
 
-Fork of ComfyUI-QwenVL so that it is compatible with ComfyUI-ZLUDA. Only works with FP16 (non-quantized versions). Tested with Qwen3-VL-4B-Instruct model. If input image size is too large, it will likely end up with an out-of-memory error message. Suggest to keep / resize the input image to around 1 megapixel.
+Fork of ComfyUI-QwenVL so that it is compatible with ComfyUI-ZLUDA. Only works with FP16 (non-quantized versions). Tested with Qwen3-VL-4B-Instruct model. If input image size is too large, it will likely end up with an out-of-memory error message. 
+
+Suggest to keep / resize the input image to around **1 megapixel**.
 
 Changes done:
 
