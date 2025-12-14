@@ -4,36 +4,36 @@ Fork of ComfyUI-QwenVL so that it is compatible with ComfyUI-ZLUDA. Only works w
 
 Changes done:
 
-1. Removed BitsAndBytesConfig Import
--Removed the import statement that was causing the rocBLAS error
--This prevents any bitsandbytes code from being loaded
+1. **Removed `BitsAndBytesConfig` Import**
+   - Removed the import statement that was causing the `rocBLAS` error.
+   - This prevents any `bitsandbytes` code from being loaded.
 
-2. Disabled Quantization Options
--Modified the Quantization enum to only include FP16
--Removed 4-bit and 8-bit quantization options
--Updated from_value() to always return FP16
+2. **Disabled Quantization Options**
+   - Modified the `Quantization` enum to only include `FP16`.
+   - Removed 4-bit and 8-bit quantization options.
+   - Updated `from_value()` to always return `FP16`.
 
-3. Updated quantization_config() Function
--Completely bypassed bitsandbytes logic
--Always returns None for quantization config and torch.float16 for dtype
--Added informative log messages
+3. **Updated `quantization_config()` Function**
+   - Completely bypassed `bitsandbytes` logic.
+   - Always returns `None` for quantization config and `torch.float16` for dtype.
+   - Added informative log messages.
 
-4. Modified load_model() Function
--Changed dtype parameter to torch_dtype (correct parameter name)
--Ensured quantization_config is never used
--Forces FP16 loading regardless of user selection
+4. **Modified `load_model()` Function**
+   - Changed `dtype` parameter to `torch_dtype` (correct parameter name).
+   - Ensured `quantization_config` is never used.
+   - Forces `FP16` loading regardless of user selection.
 
-5. Updated requirements.txt
--Commented out bitsandbytes>=0.43.0
--Fixed typo: acceleate → accelerate
--Added notes about ZLUDA compatibility
+5. **Updated `requirements.txt`**
+   - Commented out `bitsandbytes>=0.43.0`.
+   - Fixed typo: `acceleate` → `accelerate`.
+   - Added notes about ZLUDA compatibility.
 
-6. Updated UI Labels
--Changed node display names to indicate ZLUDA support
--Updated tooltips to reflect quantization changes
+6. **Updated UI Labels**
+   - Changed node display names to indicate ZLUDA support.
+   - Updated tooltips to reflect quantization changes.
 
-Result:
-The model will now load in FP16 (non-quantized) mode, which should work properly with ZLUDA on your AMD GPU without triggering the rocBLAS/Tensile errors. The quantization dropdown will still appear in the UI but will only show "None (FP16)" and will have no effect.
+### Result
+The model will now load in **FP16 (non-quantized)** mode, which should work properly with ZLUDA on your AMD GPU without triggering the `rocBLAS`/`Tensile` errors. The quantization dropdown will still appear in the UI but will only show "None (FP16)" and will have no effect.
 
 
 # **QwenVL for ComfyUI**
