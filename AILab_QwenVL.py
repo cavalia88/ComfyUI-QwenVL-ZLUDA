@@ -12,6 +12,7 @@
 # and this integration's license terms.
 #
 # Source: https://github.com/1038lab/ComfyUI-QwenVL
+# Modified for ZLUDA compatibility - bitsandbytes disabled
 
 import gc
 import json
@@ -23,7 +24,7 @@ import psutil
 import torch
 from PIL import Image
 from huggingface_hub import snapshot_download
-from transformers import AutoModelForVision2Seq, AutoProcessor, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForVision2Seq, AutoProcessor, AutoTokenizer
 
 import folder_paths
 
@@ -35,7 +36,7 @@ SYSTEM_PROMPTS = {}
 
 TOOLTIPS = {
     "model_name": "Pick the Qwen-VL checkpoint. First run downloads weights into models/LLM/Qwen-VL, so leave disk space.",
-    "quantization": "Precision vs VRAM. FP16 gives the best quality if memory allows; 8-bit suits 8–16 GB GPUs; 4-bit fits 6 GB or lower but is slower.",
+    "quantization": "Precision vs VRAM. FP16 gives the best quality if memory allows. Note: Quantization disabled for ZLUDA compatibility.",
     "attention_mode": "auto tries flash-attn v2 when installed and falls back to SDPA. Only override when debugging attention backends.",
     "preset_prompt": "Built-in instruction describing how Qwen-VL should analyze the media input.",
     "custom_prompt": "Optional override—when filled it completely replaces the preset template.",
@@ -53,8 +54,7 @@ TOOLTIPS = {
 
 
 class Quantization(str, Enum):
-    Q4 = "4-bit (VRAM-friendly)"
-    Q8 = "8-bit (Balanced)"
+    # Quantization disabled for ZLUDA - only FP16 supported
     FP16 = "None (FP16)"
 
     @classmethod
@@ -63,10 +63,8 @@ class Quantization(str, Enum):
 
     @classmethod
     def from_value(cls, value):
-        for item in cls:
-            if item.value == value:
-                return item
-        raise ValueError(f"Unsupported quantization: {value}")
+        # Always return FP16 for ZLUDA compatibility
+        return cls.FP16
 
 
 ATTENTION_MODES = ["auto", "flash_attention_2", "sdpa"]
@@ -172,46 +170,21 @@ def ensure_model(model_name):
 
 
 def enforce_memory(model_name, quantization, device_info):
-    info = MODEL_CONFIGS.get(model_name, {})
-    requirements = info.get("vram_requirement", {})
-    mapping = {
-        Quantization.Q4: requirements.get("4bit", 0),
-        Quantization.Q8: requirements.get("8bit", 0),
-        Quantization.FP16: requirements.get("full", 0),
-    }
-    needed = mapping.get(quantization, 0)
-    if not needed:
-        return quantization
-    if device_info["recommended_device"] in {"cpu", "mps"}:
-        needed *= 1.5
-        available = device_info["system_memory"]["available"]
-    else:
-        available = device_info["gpu"]["free_memory"]
-    if needed * 1.2 > available:
-        if quantization == Quantization.FP16:
-            print("[QwenVL] Auto-switch to 8-bit due to VRAM pressure")
-            return Quantization.Q8
-        if quantization == Quantization.Q8:
-            print("[QwenVL] Auto-switch to 4-bit due to VRAM pressure")
-            return Quantization.Q4
-        raise RuntimeError("Insufficient memory for 4-bit mode")
-    return quantization
+    # For ZLUDA compatibility, always use FP16 (no quantization)
+    print("[QwenVL-ZLUDA] Quantization disabled for ZLUDA compatibility - using FP16")
+    return Quantization.FP16
 
 
 def quantization_config(model_name, quantization):
+    # Completely disable bitsandbytes for ZLUDA compatibility
+    # Always return FP16 dtype
     info = MODEL_CONFIGS.get(model_name, {})
     if info.get("quantized"):
+        print("[QwenVL-ZLUDA] Pre-quantized model detected, loading as-is")
         return None, None
-    if quantization == Quantization.Q4:
-        cfg = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_use_double_quant=True,
-        )
-        return cfg, None
-    if quantization == Quantization.Q8:
-        return BitsAndBytesConfig(load_in_8bit=True), None
+    
+    # Force FP16 for ZLUDA
+    print("[QwenVL-ZLUDA] Loading model in FP16 (bitsandbytes disabled)")
     return None, torch.float16 if torch.cuda.is_available() else torch.float32
 
 
@@ -222,7 +195,7 @@ class QwenVLBase:
         self.processor = None
         self.tokenizer = None
         self.current_signature = None
-        print(f"[QwenVL] Node on {self.device_info['device_type']}")
+        print(f"[QwenVL-ZLUDA] Node on {self.device_info['device_type']} (bitsandbytes disabled)")
 
     def clear(self):
         self.model = None
@@ -242,7 +215,8 @@ class QwenVLBase:
         device_choice,
         keep_model_loaded,
     ):
-        quant = enforce_memory(model_name, Quantization.from_value(quant_value), self.device_info)
+        # Force FP16 for ZLUDA
+        quant = Quantization.FP16
         attn_impl = resolve_attention_mode(attention_mode)
         device = self.device_info["recommended_device"] if device_choice == "auto" else device_choice
         signature = (model_name, quant.value, attn_impl, device, use_compile)
@@ -252,14 +226,16 @@ class QwenVLBase:
         model_path = ensure_model(model_name)
         quant_config, dtype = quantization_config(model_name, quant)
         load_kwargs = {
-            "device_map": {"": 0} if device == "cuda" and torch.cuda.is_available() else device,
-            "dtype": dtype,
+            "device_map": {"":  0} if device == "cuda" and torch.cuda.is_available() else device,
+            "torch_dtype": dtype,
             "attn_implementation": attn_impl,
             "use_safetensors": True,
         }
-        if quant_config:
-            load_kwargs["quantization_config"] = quant_config
-        print(f"[QwenVL] Loading {model_name} ({quant.value}, attn={attn_impl})")
+        # Ensure bitsandbytes is never used
+        if quant_config is not None:
+            print("[QwenVL-ZLUDA] Warning: quantization_config ignored for ZLUDA compatibility")
+        
+        print(f"[QwenVL-ZLUDA] Loading {model_name} (FP16, attn={attn_impl})")
         self.model = AutoModelForVision2Seq.from_pretrained(model_path, **load_kwargs).eval()
         self.model.config.use_cache = True
         if hasattr(self.model, "generation_config"):
@@ -267,9 +243,9 @@ class QwenVLBase:
         if use_compile and torch.cuda.is_available():
             try:
                 self.model = torch.compile(self.model, mode="reduce-overhead")
-                print("[QwenVL] torch.compile enabled")
+                print("[QwenVL-ZLUDA] torch.compile enabled")
             except Exception as exc:
-                print(f"[QwenVL] torch.compile skipped: {exc}")
+                print(f"[QwenVL-ZLUDA] torch.compile skipped: {exc}")
         self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
         self.current_signature = signature
@@ -536,6 +512,6 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "AILab_QwenVL": "QwenVL",
-    "AILab_QwenVL_Advanced": "QwenVL (Advanced)",
+    "AILab_QwenVL": "QwenVL (ZLUDA)",
+    "AILab_QwenVL_Advanced": "QwenVL Advanced (ZLUDA)",
 }
